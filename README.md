@@ -17,9 +17,9 @@
 благодаря проведённой аугментации.
  
  <p align="center">
-  <img src="https://raw.githubusercontent.com/MikhailKuzm/Birds/master/native_spec.png" width="250" />
+  <img src="https://raw.githubusercontent.com/MikhailKuzm/Birds/master/native_spec.png" width="350" />
 
-  <img src="https://raw.githubusercontent.com/MikhailKuzm/Birds/master/aug_spec.png" width="250" />
+  <img src="https://raw.githubusercontent.com/MikhailKuzm/Birds/master/aug_spec.png" width="350" />
 </p>
  
  ### Обучение модели
