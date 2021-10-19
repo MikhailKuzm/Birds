@@ -17,7 +17,7 @@
 благодаря проведённой аугментации.
  
  <p align="center">
-  <img src="https://raw.githubusercontent.com/MikhailKuzm/Birds/master/native_spec.png" width="4500" />
+  <img src="https://raw.githubusercontent.com/MikhailKuzm/Birds/master/native_spec.png" width="450" />
 
   <img src="https://raw.githubusercontent.com/MikhailKuzm/Birds/master/aug_spec.png" width="450" />
 </p>
