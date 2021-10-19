@@ -108,7 +108,7 @@ class birdsound(Dataset):
     
     def __getitem__(self, idx):
         id = self.metadata.loc[idx, 'file_id']
-        path_to_sound = 'songs\\songs\\xc'+ str(id) + '.flac'
+        path_to_sound = 'songs\songs\\xc'+ str(id) + '.flac'
         
         signal, sample_rate = cut_sound(path = path_to_sound)
         signal = augment(sample = signal, sample_rate = sample_rate)
