@@ -28,7 +28,8 @@ def cut_sound(path, sound_length = 10):
         sample, sample_rate = librosa.load(path, sr=None)
 
         if sample.shape[0]/sample_rate > sound_length*2:
-            sample = sample[sample_rate*sound_length:sample_rate*sound_length*2]
+            start_point = np.random.randint(1,10)
+            sample = sample[sample_rate*start_point:sample_rate*start_point + sound_length*sample_rate]
 
         elif sample.shape[0]/sample_rate > sound_length:
             sample = sample[:sample_rate*sound_length]
@@ -42,15 +43,51 @@ def cut_sound(path, sound_length = 10):
         return sample, sample_rate
 
 
+def augment(sample, sample_rate):
+    #изменяем высоту звука
+    pitch = np.random.uniform(0.5,8)
+    sample_pitch = librosa.effects.pitch_shift(sample, sample_rate, 
+                                               n_steps = pitch)
+    
+    #двигаем значения по оси времени
+    sec_len = len(sample_pitch)/sample_rate
+    shift = np.random.randint(1, sec_len-1)
+    sample = np.roll(sample_pitch, shift*sample_rate)
+
+    #добавляем шум
+    choice = np.random.randint(0,2)
+    if choice == 1:
+      noise = np.random.randn(len(sample))
+      sample = sample + 0.002*noise
+
+    return sample
+
+
+
+
 def mel_spec(signal, sample_rate, n_fft, hop_length, n_mels):
     mel_gram = librosa.feature.melspectrogram(y=signal, sr=sample_rate, n_mels=n_mels,
                                     fmax=8000, hop_length = hop_length, n_fft = n_fft)
     mel_gram__dB = librosa.power_to_db(mel_gram)
     mel_gram__dB = mel_gram__dB[np.newaxis, ...]
 
+
+    spec_mean = mel_gram__dB[0].mean()
+
+    height = mel_gram__dB.shape[1]
+    width = np.random.randint(10, 60)
+    time_cut = np.full((height,width), spec_mean)
+    start_time = np.random.randint(1, mel_gram__dB.shape[2]-60)
+    mel_gram__dB[0][:,start_time:start_time+width] = time_cut
+
+
+    width = mel_gram__dB.shape[2]
+    height = np.random.randint(5, 10)
+    freq_cut = np.full((height,width), spec_mean)
+    start_freq =  np.random.randint(1, mel_gram__dB.shape[1]-10)
+    mel_gram__dB[0][start_freq:start_freq+height,:] = freq_cut
+
     return mel_gram__dB
-
-
 
 class birdsound(Dataset):
     def __init__(self, metadata, str2lab):
@@ -63,7 +100,9 @@ class birdsound(Dataset):
     def __getitem__(self, idx):
         id = self.metadata.loc[idx, 'file_id']
         path_to_sound = 'songs\\songs\\xc'+ str(id) + '.flac'
+        
         signal, sample_rate = cut_sound(path = path_to_sound)
+        signal = augment(sample = signal, sample_rate = sample_rate)
         spec = mel_spec(signal = signal, sample_rate = sample_rate, n_fft = 1024, 
                  hop_length = 512, n_mels = 64)
 
@@ -73,20 +112,16 @@ class birdsound(Dataset):
         return spec, label
 
 
-
 data_sound = birdsound(metadata = metadata, str2lab = catigories)
 
 total_items = len(data_sound)
-num_train = round(total_items * 0.8)
+num_train = round(total_items * 0.9)
 num_val = total_items - num_train
 train_data, val_data = random_split(data_sound, [num_train, num_val])
 
 # Create training and validation data loaders
 train_dl = torch.utils.data.DataLoader(train_data, batch_size=16, shuffle=True)
 val_dl = torch.utils.data.DataLoader(val_data, batch_size=8, shuffle=False)
-
-
- 
 
 
 model = models.resnet18(pretrained=False)
@@ -96,6 +131,8 @@ model = model.to(torch.float64)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 model.to(device)
 
+acc_tr_final = []
+acc_val_final = []
 class AudioClassifier():
     def __init__(self, model, train_data, val_data, epochs, lr_rate = 0.001):
         self.model = model
@@ -107,7 +144,7 @@ class AudioClassifier():
     def train(self):
         loss = nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(model.parameters(),lr = self.lr_rate)
-        lr_step = lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
+        lr_step = lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 
         for epoch in range(self.epochs):
             print(f'Обучение эпохи: {epoch}')
@@ -127,16 +164,19 @@ class AudioClassifier():
                 error.backward()
                 optimizer.step()
                 _, pred = torch.max(output, dim = 1)
-                accuracy_train += accuracy_score(label, pred)
+                accuracy_train += accuracy_score(label.cpu(), pred.cpu())
             
             print('Training accuracy = ', accuracy_train/batch_counter)
+            acc_tr_final.append(accuracy_train/batch_counter)
 
+            
             with torch.no_grad():
                 accuracy_val = 0
                 batch_counter = 0
+                best_auc = 0
                 for image, label in self.val_data:
                     batch_counter +=1
-                    image = image.to(device)
+                    image = image.to(device = device, dtype=torch.float64)
                     label = label.to(device)
                     self.model.eval()
 
@@ -144,17 +184,29 @@ class AudioClassifier():
 
                     #Получаем значения предсказаний в формате integer для использования в метрике
                     _, pred = torch.max(output, dim = 1)
-                    accuracy_val += accuracy_score(label, pred)
+                    accuracy_val += accuracy_score(label.cpu(), pred.cpu())
 
-                lr_step.step()
                 print('Validation accuracy = ', accuracy_val/batch_counter)
+                acc_val_final.append(accuracy_val/batch_counter)
+
+                if accuracy_val/batch_counter > best_auc:
+                  torch.save(model.state_dict(), 'songs//songs//best_weight.pth')
+
+            lr_step.step()
 
  
 
 net = AudioClassifier(model = model, train_data = train_dl, val_data = val_dl, 
                       epochs = 15, lr_rate = 0.001)
 
-net.train()
+#net.train()
+
+val = next(iter(val_dl))
+val[0] = val[0].to(device = device, dtype=torch.float64)
+model.eval()
+pred = model(val[0])
+print(val[1])
+print(torch.max(pred, dim = 1)[1])
 
 
 
