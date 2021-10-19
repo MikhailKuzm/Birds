@@ -194,20 +194,64 @@ class AudioClassifier():
 
             lr_step.step()
 
- 
+        
 
 net = AudioClassifier(model = model, train_data = train_dl, val_data = val_dl, 
                       epochs = 15, lr_rate = 0.001)
 
 #net.train()
 
+
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+model.load_state_dict(torch.load('best_weight.pth', map_location=device))
+
+
+def predict(image, dict4pred = catigories, model = model):
+    if not torch.is_tensor(image):
+        image = torch.tensor(x, dtype = torch.float64)
+    if len(image.shape)<3:
+        image = image.unsqueeze(0)
+    if len(image.shape)<4:
+        image = image.unsqueeze(0)
+
+    image = image.to(device = device, dtype=torch.float64)
+    model.eval()
+    
+    with torch.no_grad():
+        prediction = model(image)
+        prediction = torch.max(prediction, dim = 1)[1]
+
+        cat_keys = list(catigories.keys())
+        cat_value = list(catigories.values())
+        pred_pos = cat_value.index(prediction)
+        prediction = cat_keys[pred_pos]
+
+        return prediction
+
+
+
 val = next(iter(val_dl))
 val[0] = val[0].to(device = device, dtype=torch.float64)
 model.eval()
-pred = model(val[0])
-print(val[1])
-print(torch.max(pred, dim = 1)[1])
+with torch.no_grad():
+    pred = model(val[0])
+    print(val[1])
+    print(torch.max(pred, dim = 1)[1])
+    out = torch.max(pred, dim = 1)[1]
+    accuracy_score(val[1], out)
 
 
+y_true = []
+pred = []
+for i in range(len(val[1])):
+    pred.append(predict(val[0][i]))
+    cat_keys = list(catigories.keys())
+    cat_value = list(catigories.values())
+    pred_pos = cat_value.index(val[1][i])
+    y_true.append(cat_keys[pred_pos])
 
+print(y_true, '\n',
+      pred)
+accuracy_score(y_true, pred)
 
