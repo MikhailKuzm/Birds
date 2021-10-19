@@ -8,6 +8,7 @@ import pandas as pd
 import os
 import torch 
 from torch.utils.data import DataLoader, Dataset, random_split
+import torchvision.models as models
 #импортируем даталоадеры и словарь категорий видов птиц
 from data_processing import catigories, train_dl, val_dl 
 

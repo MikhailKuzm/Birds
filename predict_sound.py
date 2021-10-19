@@ -6,6 +6,7 @@ import os
 import torch 
 from torch.utils.data import DataLoader, Dataset, random_split
 import torch.nn as nn
+from sklearn.metrics import accuracy_score
 
 #загружаем модель, словарь с категориями птиц и валидационный dataloader
 from model_training import model
